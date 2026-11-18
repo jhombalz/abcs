@@ -1,0 +1,8 @@
+{
+  "name": "first-to-buzz", "private": true, "type": "module",
+  "scripts": {
+    "dev": "npm --prefix ../../iconcepts/faas-automation/api start",
+    "start": "npm --prefix ../../iconcepts/faas-automation/api start",
+    "test": "node --test ../../iconcepts/faas-automation/api/abcs-game/game.test.js ../../iconcepts/faas-automation/api/abcs-game/rooms.test.js"
+  }
+}

@@ -1,0 +1,10 @@
+node_modules/
+client/dist/
+.env
+*.log
+.deployment/
+.env.*
+!.env.example
+*.jks
+*.keystore
+**/key.properties
