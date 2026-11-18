@@ -28,6 +28,58 @@ Map<String, dynamic> gameRoom() => {
 
 void main() {
   testWidgets(
+    'secondary match details start collapsed and survive timer updates',
+    (tester) async {
+      final room = gameRoom();
+      String? command;
+      Future<void> show() => tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: GamePanel(
+                room: room,
+                playerId: 'a',
+                busy: false,
+                onAction: (event, _) => command = event,
+              ),
+            ),
+          ),
+        ),
+      );
+      await show();
+      await tester.pumpAndSettle();
+      expect(find.text('LIVE STANDINGS'), findsNothing);
+      expect(find.text('Room 123456'), findsNothing);
+      expect(find.text('Leave room'), findsNothing);
+      expect(
+        find.text('Choose the next number in the sequence.'),
+        findsOneWidget,
+      );
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+      await tester.ensureVisible(find.text('Standings'));
+      await tester.tap(find.text('Standings'));
+      await tester.pumpAndSettle();
+      expect(find.text('LIVE STANDINGS'), findsOneWidget);
+      room['secondsLeft'] = 14;
+      await show();
+      await tester.pumpAndSettle();
+      expect(find.text('LIVE STANDINGS'), findsOneWidget);
+      await tester.tap(find.text('Standings'));
+      await tester.pumpAndSettle();
+      expect(find.text('LIVE STANDINGS'), findsNothing);
+      await tester.ensureVisible(find.text('Room & controls'));
+      await tester.tap(find.text('Room & controls'));
+      await tester.pumpAndSettle();
+      expect(find.text('Room 123456'), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      expect(command, isNull);
+      await tester.ensureVisible(find.text('Leave room'));
+      await tester.tap(find.text('Leave room'));
+      expect(command, 'leave_room');
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
     'host chooses a subject; guest sees synced selection with controls disabled',
     (tester) async {
       final room = gameRoom()..['status'] = 'WAITING';

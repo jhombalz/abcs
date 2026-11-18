@@ -208,14 +208,7 @@ class _GamePanelState extends State<GamePanel> {
             'Question ${room['round']} / ${room['totalRounds']} · ${question['category']}',
             style: const TextStyle(fontSize: 13, letterSpacing: 0.5),
           ),
-          const SizedBox(height: 12),
-          LinearProgressIndicator(
-            value: ((room['round'] as num) / (room['totalRounds'] as num))
-                .clamp(0.0, 1.0),
-            minHeight: 4,
-            semanticsLabel: 'Match progress',
-          ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 10),
           Row(
             children: [
               Icon(
@@ -338,12 +331,6 @@ class _GamePanelState extends State<GamePanel> {
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
           ),
-          const SizedBox(height: 8),
-          if (!outcome)
-            const Text(
-              'Keyboard: Space or B to buzz · 1–4 to answer',
-              style: TextStyle(fontSize: 12, color: Color(0xffa7b7ad)),
-            ),
           if (feedback != null)
             Padding(
               padding: const EdgeInsets.only(top: 16),
@@ -443,28 +430,80 @@ class _GamePanelState extends State<GamePanel> {
         ],
       ),
     );
-    return Focus(
-      autofocus: true,
-      focusNode: focus,
-      onKeyEvent: handleKey,
-      child: Padding(
-        padding: const EdgeInsets.only(top: 24),
-        child: LayoutBuilder(
-          builder: (context, constraints) => constraints.maxWidth >= 760
-              ? Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(flex: 2, child: questionCard),
-                    const SizedBox(width: 32),
-                    Expanded(child: board),
-                  ],
-                )
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [questionCard, const SizedBox(height: 28), board],
-                ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Focus(
+          autofocus: true,
+          focusNode: focus,
+          onKeyEvent: handleKey,
+          child: questionCard,
         ),
-      ),
+        const SizedBox(height: 24),
+        if (finished)
+          board
+        else
+          ExpansionTile(
+            key: PageStorageKey('standings-${room['code']}'),
+            onExpansionChanged: (expanded) {
+              if (expanded) focus.unfocus();
+            },
+            tilePadding: EdgeInsets.zero,
+            shape: const Border(),
+            collapsedShape: const Border(),
+            leading: const Icon(Icons.leaderboard_outlined, size: 20),
+            title: const Text('Standings', style: TextStyle(fontSize: 14)),
+            subtitle: Text(
+              'Your score: ${players.where((p) => p['id'] == widget.playerId).firstOrNull?['score'] ?? 0} pts',
+              style: const TextStyle(fontSize: 12),
+            ),
+            children: [board],
+          ),
+        ExpansionTile(
+          key: PageStorageKey('room-controls-${room['code']}'),
+          onExpansionChanged: (expanded) {
+            if (expanded) focus.unfocus();
+          },
+          tilePadding: EdgeInsets.zero,
+          shape: const Border(),
+          collapsedShape: const Border(),
+          leading: const Icon(Icons.tune, size: 20),
+          title: const Text('Room & controls', style: TextStyle(fontSize: 14)),
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SelectionArea(child: Text('Room ${room['code']}')),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${players.length} player${players.length == 1 ? '' : 's'} · Host: ${players.where((p) => p['id'] == room['hostId']).firstOrNull?['name'] ?? '—'}',
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Keyboard: Space or B to buzz · 1–4 to answer',
+                    style: TextStyle(fontSize: 13),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    '15 seconds to buzz, 15 seconds to answer. +100 correct, 0 incorrect. Answers stay hidden.',
+                    style: TextStyle(fontSize: 13, height: 1.6),
+                  ),
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    onPressed: widget.busy
+                        ? null
+                        : () => widget.onAction('leave_room', {}),
+                    icon: const Icon(Icons.logout, size: 18),
+                    label: const Text('Leave room'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

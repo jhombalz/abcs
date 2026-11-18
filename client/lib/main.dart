@@ -266,7 +266,7 @@ class _LobbyPageState extends State<LobbyPage> {
       ],
     );
     final panel = Container(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(playing ? 20 : 24),
       decoration: BoxDecoration(
         color: const Color(0xff1a2723),
         borderRadius: BorderRadius.circular(24),
@@ -275,36 +275,35 @@ class _LobbyPageState extends State<LobbyPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
-            'BUZZ CLUB | QUIZ ROOM',
-            style: TextStyle(
-              fontSize: 11,
-              letterSpacing: 2,
-              color: Color(0xffdaf975),
+          if (!playing)
+            const Text(
+              'BUZZ CLUB | QUIZ ROOM',
+              style: TextStyle(
+                fontSize: 11,
+                letterSpacing: 2,
+                color: Color(0xffdaf975),
+              ),
             ),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            activeRoom != null
-                ? playing
-                      ? 'Let your knowledge shine.'
-                      : 'The room is yours.'
-                : nameConfirmed
-                ? 'Make room for fun.'
-                : 'What should we call you?',
-            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            activeRoom == null
-                ? nameConfirmed
-                      ? 'Start a fresh room or join your friends.'
-                      : 'Enter your display name to get started.'
-                : playing
-                ? '15 seconds to buzz. 15 seconds to answer.'
-                : 'Share your code and gather your players.',
-          ),
-          const SizedBox(height: 24),
+          if (!playing) const SizedBox(height: 24),
+          if (!playing)
+            Text(
+              activeRoom != null
+                  ? 'The room is yours.'
+                  : nameConfirmed
+                  ? 'Make room for fun.'
+                  : 'What should we call you?',
+              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+            ),
+          if (!playing) const SizedBox(height: 12),
+          if (!playing)
+            Text(
+              activeRoom == null
+                  ? nameConfirmed
+                        ? 'Start a fresh room or join your friends.'
+                        : 'Enter your display name to get started.'
+                  : 'Share your code and gather your players.',
+            ),
+          if (!playing) const SizedBox(height: 24),
           if (error != null) ...[
             Text(error!, style: const TextStyle(color: Colors.orangeAccent)),
             const SizedBox(height: 16),
@@ -418,11 +417,6 @@ class _LobbyPageState extends State<LobbyPage> {
                 icon: const Icon(Icons.copy, size: 16),
                 label: const Text('Copy room code'),
               ),
-            if (playing)
-              Text(
-                'Room ${activeRoom['code']} · ${players.length} player${players.length == 1 ? '' : 's'}',
-                style: const TextStyle(color: Color(0xffa7b7ad)),
-              ),
             if (!playing) const SizedBox(height: 16),
             if (!playing) Text('In the room · ${players.length} / 10'),
             if (!playing)
@@ -442,7 +436,7 @@ class _LobbyPageState extends State<LobbyPage> {
                     style: const TextStyle(fontSize: 10),
                   ),
                 ),
-            const SizedBox(height: 16),
+            if (!playing) const SizedBox(height: 16),
             if (activeRoom['status'] == 'WAITING')
               LobbySettings(
                 room: activeRoom,
@@ -457,11 +451,12 @@ class _LobbyPageState extends State<LobbyPage> {
                 busy: busy,
                 onAction: (event, payload) => action(event, payload),
               ),
-            const SizedBox(height: 20),
-            OutlinedButton(
-              onPressed: busy ? null : () => action('leave_room'),
-              child: const Text('Leave room'),
-            ),
+            if (!playing) const SizedBox(height: 20),
+            if (!playing)
+              OutlinedButton(
+                onPressed: busy ? null : () => action('leave_room'),
+                child: const Text('Leave room'),
+              ),
           ],
           if (busy)
             const Padding(
@@ -477,7 +472,7 @@ class _LobbyPageState extends State<LobbyPage> {
           padding: const EdgeInsets.all(24),
           child: Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1100),
+              constraints: BoxConstraints(maxWidth: playing ? 840 : 1100),
               child: Column(
                 children: [
                   Wrap(
@@ -514,7 +509,7 @@ class _LobbyPageState extends State<LobbyPage> {
                       ),
                     ],
                   ),
-                  const Divider(height: 48),
+                  Divider(height: playing ? 24 : 48),
                   LayoutBuilder(
                     builder: (context, constraints) => playing
                         ? panel
@@ -535,9 +530,11 @@ class _LobbyPageState extends State<LobbyPage> {
                             ],
                           ),
                   ),
-                  const SizedBox(height: 40),
-                  const Divider(),
-                  const Text('A friendly battle of brains.'),
+                  if (!playing) ...[
+                    const SizedBox(height: 40),
+                    const Divider(),
+                    const Text('A friendly battle of brains.'),
+                  ],
                 ],
               ),
             ),

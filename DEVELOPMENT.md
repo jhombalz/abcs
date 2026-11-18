@@ -20,7 +20,7 @@ Single-process memory remains the source of truth. First-to-buzz means server ar
 
 ## Phase 3 - Match presentation and options (implemented)
 
-Implemented a focused full-width match screen, responsive live standings and tied ranks, visible turn/outcome feedback, timer/progress bars, short question transitions respecting reduced motion, keyboard controls (Space/B and 1-4), turn/outcome live regions, larger touch controls, optional generated sound cues (muted by default), synchronized host-only subject selection, and host return to the same-code lobby after results. Returning resets scores and question state and reopens the room for new players. Guests follow the transition. Rematches retain the subject. User-requested count remains fixed at 10. Difficulty filtering is deferred until the source banks include ratings; no artificial difficulty labels are introduced.
+Implemented a centered question-focused match screen with collapsed standings and room controls, responsive live standings and tied ranks, visible turn/outcome feedback, timer/progress bars, short question transitions respecting reduced motion, keyboard controls (Space/B and 1-4), turn/outcome live regions, larger touch controls, optional generated sound cues (muted by default), synchronized host-only subject selection, and host return to the same-code lobby after results. Returning resets scores and question state and reopens the room for new players. Guests follow the transition. Rematches retain the subject. User-requested count remains fixed at 10. Difficulty filtering is deferred until the source banks include ratings; no artificial difficulty labels are introduced.
 
 ## Phase 4 - Recovery and hardening
 
@@ -32,7 +32,7 @@ Bonus questions, simultaneous answers, survival and teams. Solo play already wor
 
 ## Verification
 
-Node engine tests cover 1/2-player starts, membership/host permissions, answer secrecy, exclusive buzzes, choice validation, wrong answers, stale/duplicate commands, timers, disconnects, question reset, match completion and rematch. Dart Socket.IO checks exercise two real clients against Node, all ten rounds, score totals, answer privacy, subject selection, host permissions, lobby return, new joins and a Mathematics rematch. Six Flutter widget tests cover name-first lobby, buzz-before-answer, subject control synchronization, keyboard actions, tied results, host controls and large-text phone layouts. Device runs and manual multi-browser UI acceptance remain pending. Standard JavaScript web output is supported; dependency Wasm dry-run warnings remain.
+Node engine tests cover 1/2-player starts, membership/host permissions, answer secrecy, exclusive buzzes, choice validation, wrong answers, stale/duplicate commands, timers, disconnects, question reset, match completion and rematch. Dart Socket.IO checks exercise two real clients against Node, all ten rounds, score totals, answer privacy, subject selection, host permissions, lobby return, new joins and a Mathematics rematch. Seven Flutter widget tests cover name-first lobby, buzz-before-answer, subject control synchronization, keyboard actions, tied results, host controls, collapsed section persistence, and large-text phone layouts. Device runs and manual multi-browser UI acceptance remain pending. Standard JavaScript web output is supported; dependency Wasm dry-run warnings remain.
 
 ## Backend relocation
 
@@ -40,7 +40,7 @@ The Node backend now lives in C:/xampp/htdocs/iconcepts/faas-automation/api/abcs
 
 
 
-Phase 3 verification: 16 backend tests, 6 widget tests, Flutter analysis, and standard JavaScript web build pass. Full-match Socket.IO integration passes. Manual browser audio, screen-reader and mobile-device checks remain pending.
+Phase 3 verification: 16 backend tests, 7 widget tests, Flutter analysis, and standard JavaScript web build pass. Full-match Socket.IO integration passes. Manual browser audio, screen-reader and mobile-device checks remain pending.
 
 
 ## GitHub Pages deployment
