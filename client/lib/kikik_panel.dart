@@ -1,0 +1,430 @@
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+class KikikPanel extends StatefulWidget {
+  const KikikPanel({
+    super.key,
+    required this.room,
+    required this.playerId,
+    required this.busy,
+    required this.onAction,
+  });
+  final Map<String, dynamic> room;
+  final String? playerId;
+  final bool busy;
+  final void Function(String, Map<String, dynamic>) onAction;
+  @override
+  State<KikikPanel> createState() => _KikikPanelState();
+}
+
+class _KikikPanelState extends State<KikikPanel> {
+  final focus = FocusNode(debugLabel: 'KIKIK card controls');
+  String? selected;
+  String? turnId;
+  @override
+  void initState() {
+    super.initState();
+    turnId = widget.room['turnId'] as String?;
+  }
+
+  @override
+  void didUpdateWidget(covariant KikikPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final next = widget.room['turnId'] as String?;
+    if (next != turnId) {
+      turnId = next;
+      selected = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    focus.dispose();
+    super.dispose();
+  }
+
+  bool get locked => (widget.room['players'] as List).any(
+    (p) => p['id'] == widget.playerId && p['locked'] == true,
+  );
+  bool get canSelect =>
+      !widget.busy && !locked && widget.room['status'] == 'PASSING';
+  void choose(String id) {
+    if (canSelect) setState(() => selected = id);
+  }
+
+  void pass() {
+    if (!canSelect || selected == null) return;
+    widget.onAction('select_pass_card', {
+      'turnId': widget.room['turnId'],
+      'cardId': selected,
+    });
+  }
+
+  void claim() {
+    if (!widget.busy &&
+        widget.room['status'] == 'PASSING' &&
+        widget.room['canClaim'] == true) {
+      widget.onAction('claim_kikik', {'turnId': widget.room['turnId']});
+    }
+  }
+
+  KeyEventResult onKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.keyK &&
+        widget.room['canClaim'] == true) {
+      claim();
+      return KeyEventResult.handled;
+    }
+    const keys = [
+      LogicalKeyboardKey.digit1,
+      LogicalKeyboardKey.digit2,
+      LogicalKeyboardKey.digit3,
+      LogicalKeyboardKey.digit4,
+    ];
+    final index = keys.indexOf(event.logicalKey);
+    final hand = widget.room['hand'] as List? ?? [];
+    if (canSelect && index >= 0 && index < hand.length) {
+      choose(hand[index]['id'] as String);
+      return KeyEventResult.handled;
+    }
+    if (canSelect &&
+        selected != null &&
+        event.logicalKey == LogicalKeyboardKey.enter) {
+      pass();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final room = widget.room;
+    final finished = room['status'] == 'GAME_FINISHED';
+    final players = List<Map>.from(room['players'] as List);
+    final hand = List<Map>.from(room['hand'] as List? ?? []);
+    final winner = room['winner'] as Map?;
+    final seconds = room['secondsLeft'] as num? ?? 0;
+    final claimReady = room['canClaim'] == true && !finished;
+    final isHost = room['hostId'] == widget.playerId;
+    final order = players.indexWhere((p) => p['id'] == widget.playerId);
+    final nextPlayer = players.isEmpty || order < 0
+        ? null
+        : players[(order + 1) % players.length];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Focus(
+          autofocus: true,
+          focusNode: focus,
+          onKeyEvent: onKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                runSpacing: 8,
+                spacing: 20,
+                children: [
+                  const Text(
+                    'KIKIK',
+                    style: TextStyle(
+                      fontSize: 25,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 3,
+                      color: Color(0xffdaf975),
+                    ),
+                  ),
+                  if (!finished)
+                    Text(
+                      'Turn ${room['turnNumber']} · ${seconds.toInt()}s',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: seconds <= 3 ? Colors.orangeAccent : null,
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              if (!finished)
+                LinearProgressIndicator(
+                  value: (seconds / 12).clamp(0.0, 1.0),
+                  semanticsLabel: 'Time to select a card to pass',
+                ),
+              const SizedBox(height: 24),
+              Semantics(
+                liveRegion: true,
+                child: Text(
+                  finished
+                      ? winner != null
+                            ? '${winner['name']} called KIKIK!'
+                            : 'Round finished'
+                      : claimReady
+                      ? 'Four of a kind! Call KIKIK now.'
+                      : locked
+                      ? 'Card locked. Waiting for the table…'
+                      : 'Choose one card to pass.',
+                  style: const TextStyle(
+                    fontSize: 25,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                finished
+                    ? winner != null
+                          ? 'Winning hand'
+                          : '${room['notice'] ?? 'No winner this round.'}'
+                    : 'Your hand is private. Match four ranks to win.',
+                style: const TextStyle(fontSize: 15, color: Color(0xffa7b7ad)),
+              ),
+              const SizedBox(height: 22),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final width = math.min(
+                    140.0,
+                    (constraints.maxWidth - 24) / 4,
+                  );
+                  final shownHand = finished && winner != null
+                      ? List<Map>.from(winner['hand'] as List)
+                      : hand;
+                  return Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 8,
+                    runSpacing: 12,
+                    children: [
+                      for (final (index, card) in shownHand.indexed)
+                        SizedBox(
+                          width: width,
+                          height: width * 1.5,
+                          child: PlayingCard(
+                            card: card,
+                            selected: selected == card['id'] && !finished,
+                            enabled: canSelect,
+                            label: finished
+                                ? 'Winning card'
+                                : 'Card ${index + 1}',
+                            onTap: () => choose(card['id'] as String),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 22),
+              if (!finished) ...[
+                FilledButton.icon(
+                  onPressed: !widget.busy && claimReady ? claim : null,
+                  icon: const Icon(Icons.front_hand_outlined),
+                  label: const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 14),
+                    child: Text(
+                      'KIKIK!',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: canSelect && selected != null ? pass : null,
+                  icon: const Icon(Icons.check_circle_outline),
+                  label: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: Text(
+                      locked ? 'Card locked' : 'Lock card to pass',
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  locked
+                      ? '${players.where((p) => p['locked'] == true).length} / ${players.length} players locked in'
+                      : order == 0
+                      ? 'You receive from the buffer and pass to ${nextPlayer?['name'] ?? 'the next player'}.'
+                      : 'Passing clockwise to ${nextPlayer?['name'] ?? 'the next player'}.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 14),
+                ),
+              ] else if (isHost) ...[
+                FilledButton.icon(
+                  onPressed: widget.busy
+                      ? null
+                      : () => widget.onAction('start_game', {}),
+                  icon: const Icon(Icons.replay),
+                  label: const Text('Play again'),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton(
+                  onPressed: widget.busy
+                      ? null
+                      : () => widget.onAction('return_to_lobby', {}),
+                  child: const Text('Back to lobby'),
+                ),
+              ] else
+                const Text(
+                  'Waiting for the host to start again or return to the lobby.',
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+        ExpansionTile(
+          key: PageStorageKey('kikik-table-${room['code']}'),
+          title: Text('Table · ${players.length} players'),
+          initiallyExpanded: false,
+          tilePadding: EdgeInsets.zero,
+          shape: const Border(),
+          collapsedShape: const Border(),
+          onExpansionChanged: (open) {
+            if (open) focus.unfocus();
+          },
+          children: [
+            for (final (index, player) in players.indexed)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: CircleAvatar(child: Text('${index + 1}')),
+                title: Text(
+                  '${player['name']}${player['id'] == widget.playerId ? ' (you)' : ''}',
+                ),
+                subtitle: Text(
+                  player['connected'] != true
+                      ? 'Reconnecting · seat reserved for 60s'
+                      : player['locked'] == true && !finished
+                      ? 'Card locked'
+                      : 'At the table',
+                ),
+                trailing: Icon(
+                  player['connected'] != true
+                      ? Icons.wifi_off
+                      : player['locked'] == true && !finished
+                      ? Icons.check_circle_outline
+                      : Icons.person_outline,
+                  size: 20,
+                ),
+              ),
+          ],
+        ),
+        ExpansionTile(
+          key: PageStorageKey('kikik-help-${room['code']}'),
+          title: const Text('Room & rules'),
+          tilePadding: EdgeInsets.zero,
+          shape: const Border(),
+          collapsedShape: const Border(),
+          onExpansionChanged: (open) {
+            if (open) focus.unfocus();
+          },
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SelectionArea(child: Text('Room ${room['code']}')),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Pick a card, then lock it in. All selected cards pass together when everyone locks in or after 12 seconds. Unselected hands auto-pass a random card. A four-card buffer sits between the last and first seats. Your hand always has four cards.',
+                    style: TextStyle(fontSize: 15, height: 1.6),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Four cards of the same rank unlock KIKIK. The first valid claim received by the server wins. Keyboard: 1–4 to select, Enter to lock, K to claim. The round ends without a winner after 200 turns.',
+                    style: TextStyle(fontSize: 15, height: 1.6),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Reconnect within 60 seconds to keep your seat. Leaving or an expired seat ends the current round and returns everyone to the lobby.',
+                    style: TextStyle(fontSize: 14, height: 1.5),
+                  ),
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    onPressed: widget.busy
+                        ? null
+                        : () => widget.onAction('leave_room', {}),
+                    icon: const Icon(Icons.logout, size: 18),
+                    label: const Text('Leave room'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class PlayingCard extends StatelessWidget {
+  const PlayingCard({
+    super.key,
+    required this.card,
+    required this.selected,
+    required this.enabled,
+    required this.label,
+    required this.onTap,
+  });
+  final Map card;
+  final bool selected;
+  final bool enabled;
+  final String label;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    const suits = {'spades': '♠', 'hearts': '♥', 'diamonds': '♦', 'clubs': '♣'};
+    final color = ['hearts', 'diamonds'].contains(card['suit'])
+        ? const Color(0xffb52d48)
+        : const Color(0xff15231c);
+    return Semantics(
+      label: '$label: ${card['rank']} of ${card['suit']}',
+      selected: selected,
+      button: true,
+      enabled: enabled,
+      onTap: enabled ? onTap : null,
+      child: ExcludeSemantics(
+        child: OutlinedButton(
+          onPressed: enabled ? onTap : null,
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.all(8),
+            backgroundColor: selected
+                ? const Color(0xffdaf975)
+                : const Color(0xfff1f4ee),
+            disabledBackgroundColor: const Color(0xffe4e9e1),
+            side: BorderSide(
+              color: selected ? const Color(0xffdaf975) : Colors.transparent,
+              width: 3,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          child: FittedBox(
+            child: Column(
+              children: [
+                Text(
+                  '${card['rank']}',
+                  style: TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.w900,
+                    color: color,
+                  ),
+                ),
+                Text(
+                  suits[card['suit']] ?? '',
+                  style: TextStyle(fontSize: 30, color: color),
+                ),
+                if (selected) Icon(Icons.check, size: 18, color: color),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

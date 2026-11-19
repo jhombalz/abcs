@@ -3,6 +3,6 @@
   "scripts": {
     "dev": "npm --prefix ../../iconcepts/faas-automation/api start",
     "start": "npm --prefix ../../iconcepts/faas-automation/api start",
-    "test": "node --test ../../iconcepts/faas-automation/api/abcs-game/game.test.js ../../iconcepts/faas-automation/api/abcs-game/rooms.test.js"
+    "test": "npm --prefix ../../iconcepts/faas-automation/api/abcs-game test"
   }
 }

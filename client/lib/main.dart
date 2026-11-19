@@ -8,6 +8,9 @@ import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'game_panel.dart';
 import 'game_sounds.dart';
 import 'lobby_settings.dart';
+import 'kikik_panel.dart';
+import 'game_picker.dart';
+import 'seat_store.dart';
 
 void main() => runApp(const BuzzClubApp());
 
@@ -40,6 +43,13 @@ class LobbyPage extends StatefulWidget {
 
 class _LobbyPageState extends State<LobbyPage> {
   late final io.Socket socket;
+  late final String serverUrl;
+  final seatStore = SeatStore();
+  String selectedMode = 'quiz';
+  String? viewerId;
+  String? ignoredRoomCode;
+  bool restoring = false;
+  int connectionVersion = 0;
   final name = TextEditingController();
   final code = TextEditingController();
   Map<String, dynamic>? room;
@@ -59,6 +69,7 @@ class _LobbyPageState extends State<LobbyPage> {
         : kReleaseMode
         ? 'https://api.iconcept-faas.lguapp.com'
         : 'http://${Uri.base.host.isEmpty ? 'localhost' : Uri.base.host}:8099';
+    serverUrl = url;
     socket = io.io(
       url,
       io.OptionBuilder()
@@ -72,7 +83,10 @@ class _LobbyPageState extends State<LobbyPage> {
         setState(() {
           connected = true;
           error = null;
+          restoring = true;
         });
+        connectionVersion++;
+        unawaited(restoreSeat(connectionVersion));
       }
     });
     socket.onConnectError((_) {
@@ -84,13 +98,18 @@ class _LobbyPageState extends State<LobbyPage> {
       }
     });
     socket.onDisconnect((_) {
+      connectionVersion++;
       timeout?.cancel();
       if (mounted) {
         setState(() {
           connected = false;
           busy = false;
+          restoring = false;
+          final cards = room?['mode'] == 'kikik';
           room = null;
-          error = 'Disconnected. Rejoin after reconnecting.';
+          error = cards
+              ? 'Disconnected. Reconnecting to your reserved KIKIK seat…'
+              : 'Disconnected. Rejoin after reconnecting.';
         });
       }
     });
@@ -102,18 +121,95 @@ class _LobbyPageState extends State<LobbyPage> {
         setState(() {
           room = null;
           error = 'Room expired. Create a new room.';
+          unawaited(seatStore.clear());
         });
       }
     });
     if (widget.connectToServer) socket.connect();
   }
 
+  Future<void> restoreSeat(int version) async {
+    try {
+      final saved = await seatStore.load(serverUrl);
+      if (!mounted || !connected || version != connectionVersion) return;
+      if (saved == null) return;
+      Future<dynamic> requestResume() {
+        final reply = Completer<dynamic>();
+        socket.emitWithAck(
+          'resume_room',
+          {'code': saved['code'], 'token': saved['token']},
+          ack: (dynamic data) {
+            if (!reply.isCompleted) reply.complete(data);
+          },
+        );
+        return reply.future.timeout(const Duration(seconds: 6));
+      }
+
+      dynamic data = await requestResume();
+      // A page reload can open the new socket just before the old one closes.
+      for (
+        var retry = 0;
+        retry < 2 &&
+            data is Map &&
+            data['ok'] != true &&
+            '${data['error']}'.contains('already connected');
+        retry++
+      ) {
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+        if (!mounted || !connected || version != connectionVersion) return;
+        data = await requestResume();
+      }
+      if (!mounted || !connected || version != connectionVersion) return;
+      if (data is! Map || data['ok'] != true) {
+        await seatStore.clear();
+        if (mounted) {
+          setState(
+            () => error = data is Map
+                ? '${data['error']}'
+                : 'Could not restore your seat. Join a lobby.',
+          );
+        }
+        return;
+      }
+      name.text = saved['name'] is String ? saved['name'] as String : '';
+      setState(() => nameConfirmed = true);
+      receiveRoom(data['room']);
+      rememberSeat(data);
+    } on TimeoutException {
+      if (mounted && connected && version == connectionVersion) {
+        setState(
+          () => error = 'Seat restore timed out. Check your connection; reconnect within 60 seconds to try again.',
+        );
+      }
+    } finally {
+      if (mounted && version == connectionVersion) {
+        setState(() => restoring = false);
+      }
+    }
+  }
+
+  void rememberSeat(Map data) {
+    if (data['resume'] is! Map) {
+      if (data['room']?['mode'] != 'kikik') unawaited(seatStore.clear());
+      return;
+    }
+    final resume = Map<String, dynamic>.from(data['resume'] as Map);
+    unawaited(
+      seatStore.save({
+        ...resume,
+        'server': serverUrl,
+        'name': name.text.trim(),
+      }),
+    );
+  }
+
   void receiveRoom(dynamic data) {
     final next = Map<String, dynamic>.from(data as Map);
+    if (next['code'] == ignoredRoomCode) return;
     final status = next['status'];
     final feedback = next['feedback'] as Map?;
     final audioKey =
-        '${next['question']?['id']}|$status|${feedback?['kind']}|${feedback?['playerId']}';
+        '${next['question']?['id'] ?? next['turnId']}|$status|${feedback?['kind']}|${feedback?['playerId']}';
     if (soundEnabled && audioKey != lastAudioKey) {
       final cue = status == 'GAME_FINISHED'
           ? 'finish'
@@ -123,11 +219,16 @@ class _LobbyPageState extends State<LobbyPage> {
           ? 'buzz'
           : status == 'QUESTION_ACTIVE' && feedback == null
           ? 'round'
+          : status == 'PASSING'
+          ? 'round'
           : null;
       if (cue != null) unawaited(sounds.play(cue));
     }
     lastAudioKey = audioKey;
-    setState(() => room = next);
+    setState(() {
+      room = next;
+      viewerId = next['viewerId'] as String? ?? socket.id;
+    });
   }
 
   void toggleSound() {
@@ -140,7 +241,7 @@ class _LobbyPageState extends State<LobbyPage> {
   }
 
   void action(String event, [Map<String, dynamic>? payload]) {
-    if (!connected || busy) return;
+    if (!connected || busy || restoring) return;
     setState(() {
       busy = true;
       error = null;
@@ -169,8 +270,21 @@ class _LobbyPageState extends State<LobbyPage> {
       }
       if (event == 'leave_room') {
         setState(() => room = null);
+        unawaited(seatStore.clear());
       } else {
+        if (event == 'create_room' &&
+            selectedMode == 'kikik' &&
+            data['room']?['mode'] != 'kikik') {
+          ignoredRoomCode = data['room']?['code'] as String?;
+          socket.emit('leave_room');
+          setState(() {
+            room = null;
+            error = 'The API needs the KIKIK backend update before this mode can be played.';
+          });
+          return;
+        }
         receiveRoom(data['room']);
+        rememberSeat(data);
       }
     }
 
@@ -178,7 +292,12 @@ class _LobbyPageState extends State<LobbyPage> {
       event,
       event == 'leave_room'
           ? null
-          : payload ?? {'name': name.text.trim(), 'code': code.text},
+          : payload ??
+                {
+                  'name': name.text.trim(),
+                  'code': code.text,
+                  'mode': selectedMode,
+                },
       ack: ack,
     );
   }
@@ -262,7 +381,7 @@ class _LobbyPageState extends State<LobbyPage> {
           ),
         ),
         const SizedBox(height: 40),
-        const Text('1-10 players | Solo or with friends'),
+        const Text('Quiz & KIKIK | Play with friends'),
       ],
     );
     final panel = Container(
@@ -341,8 +460,18 @@ class _LobbyPageState extends State<LobbyPage> {
               ),
             ),
             const SizedBox(height: 12),
+            GamePicker(
+              value: selectedMode,
+              enabled: !busy && !restoring,
+              onChanged: (mode) => setState(() => selectedMode = mode),
+            ),
+            const SizedBox(height: 16),
             FilledButton(
-              onPressed: connected && !busy && name.text.trim().isNotEmpty
+              onPressed:
+                  connected &&
+                      !busy &&
+                      !restoring &&
+                      name.text.trim().isNotEmpty
                   ? () => action('create_room')
                   : null,
               child: const Text('Create a room'),
@@ -369,6 +498,7 @@ class _LobbyPageState extends State<LobbyPage> {
               onPressed:
                   connected &&
                       !busy &&
+                      !restoring &&
                       name.text.trim().isNotEmpty &&
                       code.text.length == 6
                   ? () => action('join_room')
@@ -418,7 +548,10 @@ class _LobbyPageState extends State<LobbyPage> {
                 label: const Text('Copy room code'),
               ),
             if (!playing) const SizedBox(height: 16),
-            if (!playing) Text('In the room · ${players.length} / 10'),
+            if (!playing)
+              Text(
+                '${activeRoom['mode'] == 'kikik' ? 'KIKIK' : 'Quiz'} room · ${players.length} / ${activeRoom['mode'] == 'kikik' ? 12 : 10}',
+              ),
             if (!playing)
               for (final player in players)
                 ListTile(
@@ -429,7 +562,7 @@ class _LobbyPageState extends State<LobbyPage> {
                     ),
                   ),
                   title: Text(
-                    '${player['name']}${player['id'] == socket.id ? ' (you)' : ''}',
+                    '${player['name']}${player['id'] == viewerId ? ' (you)' : ''}${player['connected'] == false ? ' · reconnecting' : ''}',
                   ),
                   trailing: Text(
                     player['id'] == activeRoom['hostId'] ? 'HOST' : 'PLAYER',
@@ -440,14 +573,21 @@ class _LobbyPageState extends State<LobbyPage> {
             if (activeRoom['status'] == 'WAITING')
               LobbySettings(
                 room: activeRoom,
-                isHost: activeRoom['hostId'] == socket.id,
+                isHost: activeRoom['hostId'] == viewerId,
+                busy: busy,
+                onAction: (event, payload) => action(event, payload),
+              )
+            else if (activeRoom['mode'] == 'kikik')
+              KikikPanel(
+                room: activeRoom,
+                playerId: viewerId,
                 busy: busy,
                 onAction: (event, payload) => action(event, payload),
               )
             else
               GamePanel(
                 room: activeRoom,
-                playerId: socket.id,
+                playerId: viewerId,
                 busy: busy,
                 onAction: (event, payload) => action(event, payload),
               ),
@@ -458,7 +598,7 @@ class _LobbyPageState extends State<LobbyPage> {
                 child: const Text('Leave room'),
               ),
           ],
-          if (busy)
+          if (busy || restoring)
             const Padding(
               padding: EdgeInsets.only(top: 16),
               child: LinearProgressIndicator(),

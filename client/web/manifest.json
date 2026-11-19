@@ -5,7 +5,7 @@
     "display": "standalone",
     "background_color": "#101a19",
     "theme_color": "#101a19",
-    "description": "Multiplayer quiz for quick minds.",
+    "description": "Live quizzes and KIKIK card-passing with friends.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

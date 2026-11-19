@@ -46,3 +46,7 @@ Phase 3 verification: 16 backend tests, 7 widget tests, Flutter analysis, and st
 ## GitHub Pages deployment
 
 The Flutter frontend deploys from jhombalz/abcs main via GitHub Actions with base href /abcs/ and HTTPS backend https://api.iconcept-faas.lguapp.com. Production defaults target that backend; debug defaults retain local port 8099. The API remains in faas-automation/api; Express and Socket.IO CORS include https://jhombalz.github.io. API-host deployment is separate from Pages. At initial deployment preparation the public API's game health and Socket.IO endpoints returned 404; upload/restart the updated backend and verify public connectivity.
+
+## KIKIK mode (implemented)
+
+KIKIK is a separate 3-12 player card game with mode-aware rooms, private per-seat snapshots, simultaneous passing through a four-card buffer, 12-second turns and AFK auto-pass, first valid four-of-a-kind claim, host rematch/lobby controls, and 60-second token-authenticated seat recovery. Quiz rules remain separate. See KIKIK.md for exact rules, network contract and intentional differences from the design proposal. The test suite now has 26 backend tests and 10 Flutter widget tests, plus a three-client Dart smoke check. General quiz reconnection and broader hardening remain Phase 4 work.

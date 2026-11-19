@@ -15,6 +15,57 @@ class LobbySettings extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (room['mode'] == 'kikik') {
+      final players = room['players'] as List;
+      final ready =
+          players.length >= 3 && players.every((p) => p['connected'] == true);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'KIKIK',
+            style: TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.bold,
+              color: Color(0xffdaf975),
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Choose one card to pass clockwise each turn. Collect four cards of the same rank and call KIKIK first.',
+            style: TextStyle(fontSize: 16, height: 1.6),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            '3–12 players · 4 cards each · 12 seconds per pass',
+            style: TextStyle(fontSize: 14),
+          ),
+          const SizedBox(height: 12),
+          if (room['notice'] != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text('${room['notice']}'),
+            ),
+          if (!ready)
+            Text(
+              players.length < 3
+                  ? 'Invite ${3 - players.length} more player(s) to start.'
+                  : 'Waiting for reserved seats to reconnect (up to 60 seconds).',
+            ),
+          const SizedBox(height: 16),
+          if (isHost)
+            FilledButton.icon(
+              onPressed: !busy && ready
+                  ? () => onAction('start_game', {})
+                  : null,
+              icon: const Icon(Icons.play_arrow),
+              label: const Text('Start KIKIK'),
+            )
+          else
+            const Text('Waiting for the host to start KIKIK.'),
+        ],
+      );
+    }
     final category = room['settings']?['category'] as String? ?? 'Mixed';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
