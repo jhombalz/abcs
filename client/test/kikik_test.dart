@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:buzz_club/kikik_panel.dart';
 import 'package:buzz_club/lobby_settings.dart';
 import 'package:buzz_club/game_picker.dart';
+import 'package:buzz_club/kikik_table.dart';
 
 Map<String, dynamic> cardRoom() => {
   'mode': 'kikik',
@@ -28,6 +29,141 @@ Map<String, dynamic> cardRoom() => {
 };
 
 void main() {
+  testWidgets(
+    'a pass animates card backs and replaces only the outgoing slot',
+    (tester) async {
+      final room = cardRoom()..['matchId'] = 'match1';
+      Map<String, dynamic>? payload;
+      Future<void> show() => tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: KikikPanel(
+                room: room,
+                playerId: 'a',
+                busy: false,
+                onAction: (_, data) => payload = data,
+              ),
+            ),
+          ),
+        ),
+      );
+      await show();
+      await tester.pump();
+      final hiddenBefore = find.byType(HiddenCard).evaluate().length;
+      final hand = List<Map>.from(room['hand'] as List);
+      room['hand'] = [
+        hand[0],
+        hand[2],
+        hand[3],
+        {'id': '7-spades', 'rank': '7', 'suit': 'spades'},
+      ];
+      room['turnId'] = 'turn2';
+      room['turnNumber'] = 2;
+      await show();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byType(HiddenCard).evaluate().length, hiddenBefore + 4);
+      expect(find.byType(PlayingCard), findsNWidgets(4));
+      final cards = tester
+          .widgetList<PlayingCard>(
+            find.descendant(
+              of: find.byKey(const ValueKey('own-hand')),
+              matching: find.byType(PlayingCard),
+            ),
+          )
+          .toList();
+      expect(cards.map((c) => c.card['id']), [
+        'A-spades',
+        '7-spades',
+        'A-diamonds',
+        'A-clubs',
+      ]);
+      expect(cards[1].received, true);
+      await tester.sendKeyEvent(LogicalKeyboardKey.digit2);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      expect(payload?['cardId'], '7-spades');
+      await tester.pumpAndSettle();
+      expect(find.byType(HiddenCard).evaluate().length, hiddenBefore);
+      expect(
+        tester
+            .widgetList<PlayingCard>(find.byType(PlayingCard))
+            .any((c) => c.received),
+        false,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'circular seats fit 3-12 players on narrow screens and respect reduced motion',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final room = cardRoom();
+      Future<void> show() => tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(
+              size: Size(360, 1000),
+              textScaler: TextScaler.linear(1.4),
+              disableAnimations: true,
+            ),
+            child: Scaffold(
+              body: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 44),
+                child: KikikPanel(
+                  room: room,
+                  playerId: 'a',
+                  busy: false,
+                  onAction: (_, _) {},
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      for (final count in [3, 6, 8, 12]) {
+        room['players'] = [
+          for (var i = 0; i < count; i++)
+            {
+              'id': i == 0 ? 'a' : 'p$i',
+              'name': 'Player $i long name',
+              'connected': true,
+              'locked': true,
+            },
+        ];
+        await show();
+        await tester.pump();
+        final bounds = tester.getRect(find.byType(KikikTable));
+        final seats = [
+          for (final player in room['players'] as List)
+            tester.getRect(find.byKey(ValueKey('kikik-seat-${player['id']}'))),
+        ];
+        for (var i = 0; i < seats.length; i++) {
+          expect(bounds.inflate(1).contains(seats[i].topLeft), true);
+          expect(bounds.inflate(1).contains(seats[i].bottomRight), true);
+          for (var j = i + 1; j < seats.length; j++) {
+            final overlap = seats[i].intersect(seats[j]);
+            expect(
+              overlap.width > 1 && overlap.height > 1,
+              false,
+              reason: '$count players: seats $i/$j overlap',
+            );
+          }
+        }
+        expect(tester.takeException(), isNull);
+      }
+      final hiddenBefore = find.byType(HiddenCard).evaluate().length;
+      room['turnId'] = 'turn2';
+      room['turnNumber'] = 2;
+      await show();
+      await tester.pump();
+      expect(find.byType(HiddenCard).evaluate().length, hiddenBefore);
+    },
+  );
   testWidgets(
     'pick a mode and require at least three connected players for KIKIK',
     (tester) async {
@@ -186,11 +322,50 @@ void main() {
       await show();
       expect(tester.takeException(), isNull);
       room['status'] = 'GAME_FINISHED';
-      room['winner'] = {'id': 'a', 'name': 'Alex', 'hand': room['hand']};
+      final winningHand = [
+        for (final suit in ['spades', 'hearts', 'diamonds', 'clubs'])
+          {'id': '7-$suit', 'rank': '7', 'suit': suit},
+      ];
+      room['winner'] = {'id': 'a', 'name': 'Alex', 'hand': winningHand};
+      final ownBefore = tester
+          .widgetList<PlayingCard>(
+            find.descendant(
+              of: find.byKey(const ValueKey('own-hand')),
+              matching: find.byType(PlayingCard),
+            ),
+          )
+          .map((c) => c.card['id'])
+          .toList();
+      final beforeRect = tester.getRect(find.byKey(const ValueKey('own-hand')));
       await show();
       expect(find.text('Alex called KIKIK!'), findsOneWidget);
       expect(find.text('Play again'), findsNothing);
-      expect(find.byType(PlayingCard), findsNWidgets(4));
+      expect(find.byType(PlayingCard), findsNWidgets(8));
+      final ownAfter = tester
+          .widgetList<PlayingCard>(
+            find.descendant(
+              of: find.byKey(const ValueKey('own-hand')),
+              matching: find.byType(PlayingCard),
+            ),
+          )
+          .map((c) => c.card['id'])
+          .toList();
+      expect(ownAfter, ownBefore);
+      expect(
+        tester.getRect(find.byKey(const ValueKey('own-hand'))),
+        beforeRect,
+      );
+      expect(
+        tester
+            .widgetList<PlayingCard>(
+              find.descendant(
+                of: find.byKey(const ValueKey('winning-hand')),
+                matching: find.byType(PlayingCard),
+              ),
+            )
+            .map((c) => c.card['rank']),
+        everyElement('7'),
+      );
       expect(tester.takeException(), isNull);
     },
   );

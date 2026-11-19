@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'kikik_table.dart';
+
 class KikikPanel extends StatefulWidget {
   const KikikPanel({
     super.key,
@@ -19,29 +21,95 @@ class KikikPanel extends StatefulWidget {
   State<KikikPanel> createState() => _KikikPanelState();
 }
 
-class _KikikPanelState extends State<KikikPanel> {
+class _KikikPanelState extends State<KikikPanel>
+    with SingleTickerProviderStateMixin {
   final focus = FocusNode(debugLabel: 'KIKIK card controls');
   String? selected;
   String? turnId;
+  late final AnimationController passes;
+  List<Map> displayedHand = [];
+  String? receivedId;
+  String? matchId;
+  int lastTurn = 0;
   @override
   void initState() {
     super.initState();
     turnId = widget.room['turnId'] as String?;
+    matchId = widget.room['matchId'] as String?;
+    lastTurn = (widget.room['turnNumber'] as num? ?? 0).toInt();
+    displayedHand = List<Map>.from(widget.room['hand'] as List? ?? []);
+    passes = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    );
+    passes.addStatusListener((status) {
+      if (status == AnimationStatus.completed && mounted) {
+        setState(() => receivedId = null);
+      }
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      passes.stop();
+      receivedId = null;
+    }
   }
 
   @override
   void didUpdateWidget(covariant KikikPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     final next = widget.room['turnId'] as String?;
+    final nextMatch = widget.room['matchId'] as String?;
+    final nextTurn = (widget.room['turnNumber'] as num? ?? 0).toInt();
+    final newHand = List<Map>.from(widget.room['hand'] as List? ?? []);
+    final sameRound = nextMatch == matchId;
+    final incoming = newHand
+        .where((card) => !displayedHand.any((old) => old['id'] == card['id']))
+        .toList();
+    final outgoing = displayedHand
+        .where((card) => !newHand.any((next) => next['id'] == card['id']))
+        .toList();
+    if (sameRound &&
+        displayedHand.length == 4 &&
+        newHand.length == 4 &&
+        incoming.length <= 1 &&
+        incoming.length == outgoing.length) {
+      final remaining = {for (final card in newHand) card['id']: card};
+      // Keep retained cards in their original slots; the received card fills the gap.
+      displayedHand = [
+        for (final card in displayedHand)
+          remaining[card['id']] ?? incoming.single,
+      ];
+    } else {
+      displayedHand = newHand;
+    }
     if (next != turnId) {
       turnId = next;
       selected = null;
     }
+    if (sameRound &&
+        nextTurn == lastTurn + 1 &&
+        widget.room['status'] == 'PASSING' &&
+        !MediaQuery.disableAnimationsOf(context)) {
+      receivedId = incoming.length == 1
+          ? incoming.single['id'] as String
+          : null;
+      passes.forward(from: 0);
+    } else if (!sameRound || widget.room['status'] != 'PASSING') {
+      passes.stop();
+      receivedId = null;
+    }
+    lastTurn = nextTurn;
+    matchId = nextMatch;
   }
 
   @override
   void dispose() {
     focus.dispose();
+    passes.dispose();
     super.dispose();
   }
 
@@ -84,7 +152,7 @@ class _KikikPanelState extends State<KikikPanel> {
       LogicalKeyboardKey.digit4,
     ];
     final index = keys.indexOf(event.logicalKey);
-    final hand = widget.room['hand'] as List? ?? [];
+    final hand = displayedHand;
     if (canSelect && index >= 0 && index < hand.length) {
       choose(hand[index]['id'] as String);
       return KeyEventResult.handled;
@@ -98,12 +166,55 @@ class _KikikPanelState extends State<KikikPanel> {
     return KeyEventResult.ignored;
   }
 
+  Widget _cards(List<Map> hand, {bool winning = false}) => LayoutBuilder(
+    builder: (context, constraints) {
+      final gap = winning ? 4.0 : 8.0;
+      final width = math.min(
+        winning ? 54.0 : 140.0,
+        (constraints.maxWidth - gap * 3) / 4,
+      );
+      return AnimatedBuilder(
+        animation: passes,
+        builder: (context, _) => Wrap(
+          key: ValueKey(winning ? 'winning-hand' : 'own-hand'),
+          alignment: WrapAlignment.center,
+          spacing: gap,
+          runSpacing: 12,
+          children: [
+            for (final (index, card) in hand.indexed)
+              SizedBox(
+                width: width,
+                height: width * 1.5,
+                child: PlayingCard(
+                  card: card,
+                  selected:
+                      !winning &&
+                      selected == card['id'] &&
+                      widget.room['status'] != 'GAME_FINISHED',
+                  received:
+                      !winning &&
+                      passes.isAnimating &&
+                      receivedId == card['id'],
+                  compact: winning,
+                  enabled: !winning && canSelect,
+                  label: winning
+                      ? 'Winning card ${index + 1}'
+                      : 'Card ${index + 1}',
+                  onTap: () => choose(card['id'] as String),
+                ),
+              ),
+          ],
+        ),
+      );
+    },
+  );
+
   @override
   Widget build(BuildContext context) {
     final room = widget.room;
     final finished = room['status'] == 'GAME_FINISHED';
     final players = List<Map>.from(room['players'] as List);
-    final hand = List<Map>.from(room['hand'] as List? ?? []);
+    final hand = displayedHand;
     final winner = room['winner'] as Map?;
     final seconds = room['secondsLeft'] as num? ?? 0;
     final claimReady = room['canClaim'] == true && !finished;
@@ -122,29 +233,44 @@ class _KikikPanelState extends State<KikikPanel> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Wrap(
-                alignment: WrapAlignment.spaceBetween,
-                runSpacing: 8,
-                spacing: 20,
+              Row(
                 children: [
-                  const Text(
-                    'KIKIK',
-                    style: TextStyle(
-                      fontSize: 25,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 3,
-                      color: Color(0xffdaf975),
-                    ),
-                  ),
-                  if (!finished)
-                    Text(
-                      'Turn ${room['turnNumber']} · ${seconds.toInt()}s',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: seconds <= 3 ? Colors.orangeAccent : null,
+                  const Expanded(
+                    child: SizedBox(
+                      height: 40,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'KIKIK',
+                          style: TextStyle(
+                            fontSize: 25,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 3,
+                            color: Color(0xffdaf975),
+                          ),
+                        ),
                       ),
                     ),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        'Turn ${room['turnNumber']}',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      Text(
+                        finished ? 'Done' : '${seconds.toInt()}s',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: seconds <= 3 ? Colors.orangeAccent : null,
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
               const SizedBox(height: 12),
@@ -152,20 +278,22 @@ class _KikikPanelState extends State<KikikPanel> {
                 LinearProgressIndicator(
                   value: (seconds / 12).clamp(0.0, 1.0),
                   semanticsLabel: 'Time to select a card to pass',
-                ),
-              const SizedBox(height: 24),
+                )
+              else
+                const SizedBox(height: 4),
+              const SizedBox(height: 12),
+              KikikTable(
+                players: players,
+                viewerId: widget.playerId,
+                animation: passes,
+                finished: finished,
+                winner: winner,
+              ),
+              const SizedBox(height: 16),
               Semantics(
                 liveRegion: true,
                 child: Text(
-                  finished
-                      ? winner != null
-                            ? '${winner['name']} called KIKIK!'
-                            : 'Round finished'
-                      : claimReady
-                      ? 'Four of a kind! Call KIKIK now.'
-                      : locked
-                      ? 'Card locked. Waiting for the table…'
-                      : 'Choose one card to pass.',
+                  'Your hand',
                   style: const TextStyle(
                     fontSize: 25,
                     fontWeight: FontWeight.bold,
@@ -174,48 +302,72 @@ class _KikikPanelState extends State<KikikPanel> {
               ),
               const SizedBox(height: 10),
               Text(
-                finished
-                    ? winner != null
-                          ? 'Winning hand'
-                          : '${room['notice'] ?? 'No winner this round.'}'
-                    : 'Your hand is private. Match four ranks to win.',
+                'Only you can see these cards.',
                 style: const TextStyle(fontSize: 15, color: Color(0xffa7b7ad)),
               ),
               const SizedBox(height: 22),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final width = math.min(
-                    140.0,
-                    (constraints.maxWidth - 24) / 4,
-                  );
-                  final shownHand = finished && winner != null
-                      ? List<Map>.from(winner['hand'] as List)
-                      : hand;
-                  return Wrap(
-                    alignment: WrapAlignment.center,
-                    spacing: 8,
-                    runSpacing: 12,
+              _cards(hand),
+              const SizedBox(height: 22),
+              if (finished && winner != null)
+                Container(
+                  key: const ValueKey('winner-reveal'),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xff213d2e),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xffdaf975)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      for (final (index, card) in shownHand.indexed)
-                        SizedBox(
-                          width: width,
-                          height: width * 1.5,
-                          child: PlayingCard(
-                            card: card,
-                            selected: selected == card['id'] && !finished,
-                            enabled: canSelect,
-                            label: finished
-                                ? 'Winning card'
-                                : 'Card ${index + 1}',
-                            onTap: () => choose(card['id'] as String),
+                      Semantics(
+                        liveRegion: true,
+                        child: Text(
+                          '${winner['name']} called KIKIK!',
+                          style: const TextStyle(
+                            fontSize: 21,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xffdaf975),
                           ),
                         ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Winning hand',
+                        style: TextStyle(fontSize: 14),
+                      ),
+                      const SizedBox(height: 12),
+                      _cards(
+                        List<Map>.from(winner['hand'] as List),
+                        winning: true,
+                      ),
                     ],
-                  );
-                },
-              ),
-              const SizedBox(height: 22),
+                  ),
+                ),
+              if (finished && winner != null) const SizedBox(height: 16),
+              if (finished && winner == null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Text('${room['notice'] ?? 'No winner this round.'}'),
+                ),
               if (!finished) ...[
+                Semantics(
+                  liveRegion: true,
+                  child: Text(
+                    claimReady
+                        ? 'Four of a kind! Call KIKIK now.'
+                        : passes.isAnimating
+                        ? 'One card passed. One card received.'
+                        : locked
+                        ? 'Card locked. Waiting for the table…'
+                        : 'Choose one card, then lock it to pass.',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
                 FilledButton.icon(
                   onPressed: !widget.busy && claimReady ? claim : null,
                   icon: const Icon(Icons.front_hand_outlined),
@@ -369,12 +521,16 @@ class PlayingCard extends StatelessWidget {
     required this.enabled,
     required this.label,
     required this.onTap,
+    this.received = false,
+    this.compact = false,
   });
   final Map card;
   final bool selected;
   final bool enabled;
   final String label;
   final VoidCallback onTap;
+  final bool received;
+  final bool compact;
   @override
   Widget build(BuildContext context) {
     const suits = {'spades': '♠', 'hearts': '♥', 'diamonds': '♦', 'clubs': '♣'};
@@ -382,7 +538,8 @@ class PlayingCard extends StatelessWidget {
         ? const Color(0xffb52d48)
         : const Color(0xff15231c);
     return Semantics(
-      label: '$label: ${card['rank']} of ${card['suit']}',
+      label:
+          '$label: ${card['rank']} of ${card['suit']}${received ? ', just received' : ''}',
       selected: selected,
       button: true,
       enabled: enabled,
@@ -391,17 +548,21 @@ class PlayingCard extends StatelessWidget {
         child: OutlinedButton(
           onPressed: enabled ? onTap : null,
           style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.all(8),
+            padding: EdgeInsets.all(compact ? 2 : 8),
             backgroundColor: selected
                 ? const Color(0xffdaf975)
                 : const Color(0xfff1f4ee),
             disabledBackgroundColor: const Color(0xffe4e9e1),
             side: BorderSide(
-              color: selected ? const Color(0xffdaf975) : Colors.transparent,
+              color: selected
+                  ? const Color(0xffdaf975)
+                  : received
+                  ? const Color(0xff55dcc7)
+                  : Colors.transparent,
               width: 3,
             ),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(compact ? 5 : 12),
             ),
           ),
           child: FittedBox(

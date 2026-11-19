@@ -43,7 +43,7 @@ The health endpoint /abcs-game/health advertises modes: ["quiz", "kikik"]. If th
 
 npm test from the abcs root runs 26 backend tests, including a three-client WebSocket/Socket.IO integration test. Tests cover scaled decks, unique cards, buffer movement, card conservation, private views, membership/host permissions, duplicate/stale actions, claims, timeouts, turn limits, reconnect authentication/expiry, mode isolation and quiz regressions. Tests use Node.js 22+ for the built-in WebSocket test client.
 
-Flutter has 10 widget tests covering existing quiz flows plus KIKIK mode selection, player minimums, selection/locking, keyboard claims, busy states, winners, and large-text phone layouts.
+Flutter has 12 widget tests covering existing quiz flows plus KIKIK mode selection, player minimums, selection/locking, keyboard claims, busy states, winners, and large-text phone layouts.
 
 For a running API, from client:
 
@@ -52,3 +52,9 @@ dart run tool/check_kikik.dart http://localhost:8099
 ```
 
 This creates three real Dart clients, checks private hands, resolves a simultaneous pass, and reconnects one seat. For manual acceptance, open three browser tabs, create one KIKIK room, join the other two, start, lock one card in each tab, reload a tab to test its reservation, and continue until someone can claim. Browser audio, physical-device interaction and production proxy behavior still need manual checks.
+
+## Circular table presentation
+
+Seats appear around an oval table, with the viewer at the bottom and only face-down cards at other seats. The four-card buffer is visible at the center. After an authoritative turn update, face-down cards animate clockwise, including the two legs through the buffer. Animations do not delay valid selections or claims. The new card highlights briefly and occupies the outgoing card slot; retained cards stay in their slots, including keyboard numbering. Reduced-motion settings skip the animation.
+
+When KIKIK is claimed, each viewer keeps their own four cards in place. The winner is marked at their seat and their winning hand is revealed in a separate panel below the viewer hand. Other hands remain hidden. These are frontend presentation changes using existing private snapshots; no new server data or backend update is required.
