@@ -26,6 +26,7 @@ Map<String, dynamic> cardRoom() => {
   'turnNumber': 1,
   'secondsLeft': 12,
   'winner': null,
+  'settings': {'dealRule': 'all_dealt'},
 };
 
 void main() {
@@ -62,7 +63,9 @@ void main() {
       room['turnNumber'] = 2;
       await show();
       await tester.pump(const Duration(milliseconds: 300));
-      expect(find.byType(HiddenCard).evaluate().length, hiddenBefore + 4);
+      expect(hiddenBefore, 12);
+      expect(find.text('All cards dealt'), findsOneWidget);
+      expect(find.byType(HiddenCard).evaluate().length, hiddenBefore + 3);
       expect(find.byType(PlayingCard), findsNWidgets(4));
       final cards = tester
           .widgetList<PlayingCard>(
@@ -221,6 +224,22 @@ void main() {
             )
             .onPressed,
         isNotNull,
+      );
+      room['settings'] = {};
+      await show();
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Start KIKIK'),
+            )
+            .onPressed,
+        isNull,
+      );
+      expect(
+        find.text(
+          'The API needs the latest KIKIK rule update before starting.',
+        ),
+        findsOneWidget,
       );
     },
   );

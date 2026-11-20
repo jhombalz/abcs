@@ -84,11 +84,26 @@ Future<void> main(List<String> args) async {
     );
     final started = await send(host, 'start_game', {});
     check(started['ok'] == true, 'Could not start');
+    check(
+      started['room']['settings']['dealRule'] == 'all_dealt',
+      'The API needs the all-cards-dealt KIKIK rule update.',
+    );
     final all = [
       started['room'] as Map,
       await wait(second, (s) => s['status'] == 'PASSING'),
       await wait(third, (s) => s['status'] == 'PASSING'),
     ];
+    final dealt = [for (final state in all) ...state['hand'] as List];
+    check(
+      dealt.length == 12 && dealt.map((c) => c['id']).toSet().length == 12,
+      'Three players must receive exactly 12 unique cards.',
+    );
+    final ranks = dealt.map((c) => c['rank'] as String).toSet().toList()
+      ..sort();
+    check(
+      ranks.join(',') == 'J,K,Q',
+      'Three players must use Kings, Queens, and Jacks only.',
+    );
     for (var i = 0; i < all.length; i++) {
       final own = all[i];
       check((own['hand'] as List).length == 4, 'Wrong hand size');

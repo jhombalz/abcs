@@ -399,8 +399,6 @@ class _KikikPanelState extends State<KikikPanel>
                 Text(
                   locked
                       ? '${players.where((p) => p['locked'] == true).length} / ${players.length} players locked in'
-                      : order == 0
-                      ? 'You receive from the buffer and pass to ${nextPlayer?['name'] ?? 'the next player'}.'
                       : 'Passing clockwise to ${nextPlayer?['name'] ?? 'the next player'}.',
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 14),
@@ -482,7 +480,7 @@ class _KikikPanelState extends State<KikikPanel>
                   SelectionArea(child: Text('Room ${room['code']}')),
                   const SizedBox(height: 12),
                   const Text(
-                    'Pick a card, then lock it in. All selected cards pass together when everyone locks in or after 12 seconds. Unselected hands auto-pass a random card. A four-card buffer sits between the last and first seats. Your hand always has four cards.',
+                    'There is one four-card rank set per player. Three players use Kings, Queens and Jacks; each extra player adds the next rank (10, 9, and so on). All cards are shuffled and dealt, four per player. No cards remain in a deck. Selected cards pass together clockwise, directly from the last player back to the first. Turns resolve when everyone locks or after 12 seconds, with random auto-passes for unselected hands.',
                     style: TextStyle(fontSize: 15, height: 1.6),
                   ),
                   const SizedBox(height: 12),

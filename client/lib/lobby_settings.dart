@@ -17,8 +17,11 @@ class LobbySettings extends StatelessWidget {
   Widget build(BuildContext context) {
     if (room['mode'] == 'kikik') {
       final players = room['players'] as List;
+      final currentRules = room['settings']?['dealRule'] == 'all_dealt';
       final ready =
-          players.length >= 3 && players.every((p) => p['connected'] == true);
+          currentRules &&
+          players.length >= 3 &&
+          players.every((p) => p['connected'] == true);
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -29,6 +32,11 @@ class LobbySettings extends StatelessWidget {
               fontWeight: FontWeight.bold,
               color: Color(0xffdaf975),
             ),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'One rank set per player. For 3 players: four Kings, four Queens and four Jacks. Every card is shuffled and dealt.',
+            style: TextStyle(fontSize: 14, height: 1.5),
           ),
           const SizedBox(height: 12),
           const Text(
@@ -46,7 +54,11 @@ class LobbySettings extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 12),
               child: Text('${room['notice']}'),
             ),
-          if (!ready)
+          if (!currentRules)
+            const Text(
+              'The API needs the latest KIKIK rule update before starting.',
+            )
+          else if (!ready)
             Text(
               players.length < 3
                   ? 'Invite ${3 - players.length} more player(s) to start.'

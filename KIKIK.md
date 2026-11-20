@@ -6,13 +6,13 @@ KIKIK is a separate game in Buzz Club. The original proposal is in kikik_game_de
 
 Enter a display name and press OK. Choose KIKIK before creating a room. Other players join using the same six-digit code; the room determines their game mode automatically. KIKIK requires 3-12 connected players. Quiz still supports 1-10.
 
-The server selects N+1 ranks and all four suits for each rank, shuffles using crypto.randomInt, deals four cards per player, and reserves four cards in a queue. Every player chooses one card, then presses Lock card to pass. Locked selections cannot change. All cards pass simultaneously when everyone locks or after 12 seconds. Unselected hands auto-pass a random card. The first seat receives from the front of the buffer; the last seat adds its outgoing card to the back. Each player always holds four cards.
+The server selects exactly N ranks for N players, using Kings, Queens, Jacks, then 10, 9, 8, and so on as players increase. Three players use exactly four Kings, four Queens and four Jacks (12 cards); four players add the four 10s (16 cards). Each rank has all four suits. The full 4×N-card deck is shuffled using crypto.randomInt and every card is dealt, four per player. No draw pile or buffer remains. Every player chooses one card, then presses Lock card to pass. Locked selections cannot change. All cards pass simultaneously when everyone locks or after 12 seconds. Unselected hands auto-pass a random card. Every player receives the card passed by the previous seat; the last seat passes directly to the first. Each player always holds four cards.
 
 Four matching ranks unlock KIKIK. The first valid claim received by the server wins. Client timestamps are not used. A matching starting hand can claim immediately. A player may still claim a matching hand after locking a pass, until that turn resolves. Claims/selections carry the current turn ID; requests for an old turn or rematch are rejected. Invalid claims earn no win; the optional false-claim penalty is not enabled.
 
 Keyboard: 1-4 selects a card, Enter locks it, K claims. The table and room/rules panels are collapsed to keep the hand and actions prominent. Opponents show only connection and lock status. Only the winning hand is revealed at the end. The host can rematch or return everyone to the same lobby. No quiz question data or scoring is involved.
 
-The buffer improves circulation but is not a proof that a round will finish. A round ends without a winner at the 200-turn limit. No automatic reshuffle changes anyone's hand mid-round.
+A round ends without a winner at the 200-turn limit. No automatic reshuffle changes anyone's hand mid-round.
 
 ## Reconnection and leaving
 
@@ -33,7 +33,7 @@ Backend files remain in faas-automation/api/abcs-game. No additional Node depend
 - select_pass_card: { turnId, cardId }. Ownership and one-selection-per-turn are validated.
 - claim_kikik: { turnId }. The server checks the current hand.
 - leave_room: permanently leaves the seat and revokes its credential.
-- room_updated: emitted separately to each connected member. Includes public table information plus only that member's hand, canClaim flag, viewerId and current turn. Internal deck, pass buffer, selections and tokens are excluded. A finished snapshot includes the winning hand only.
+- room_updated: emitted separately to each connected member. Includes public table information plus only that member's hand, canClaim flag, viewerId and current turn. Other players hands, internal selections and tokens are excluded. Settings include dealRule: "all_dealt" so new clients can detect an outdated API. A finished snapshot includes the winning hand only.
 
 Successful create/join/resume acknowledgments include { ok, room, playerId, resume: { code, token } } for KIKIK. Other successful actions include { ok, room, playerId }. Errors use { ok: false, error }. No unfiltered room object is broadcast. Quiz snapshots still omit correct answers and its future deck.
 
@@ -41,7 +41,7 @@ The health endpoint /abcs-game/health advertises modes: ["quiz", "kikik"]. If th
 
 ## Verification
 
-npm test from the abcs root runs 26 backend tests, including a three-client WebSocket/Socket.IO integration test. Tests cover scaled decks, unique cards, buffer movement, card conservation, private views, membership/host permissions, duplicate/stale actions, claims, timeouts, turn limits, reconnect authentication/expiry, mode isolation and quiz regressions. Tests use Node.js 22+ for the built-in WebSocket test client.
+npm test from the abcs root runs 26 backend tests, including a three-client WebSocket/Socket.IO integration test. Tests cover scaled decks, unique cards, direct clockwise passing and last-to-first wraparound, card conservation, private views, membership/host permissions, duplicate/stale actions, claims, timeouts, turn limits, reconnect authentication/expiry, mode isolation and quiz regressions. Tests use Node.js 22+ for the built-in WebSocket test client.
 
 Flutter has 12 widget tests covering existing quiz flows plus KIKIK mode selection, player minimums, selection/locking, keyboard claims, busy states, winners, and large-text phone layouts.
 
@@ -55,6 +55,6 @@ This creates three real Dart clients, checks private hands, resolves a simultane
 
 ## Circular table presentation
 
-Seats appear around an oval table, with the viewer at the bottom and only face-down cards at other seats. The four-card buffer is visible at the center. After an authoritative turn update, face-down cards animate clockwise, including the two legs through the buffer. Animations do not delay valid selections or claims. The new card highlights briefly and occupies the outgoing card slot; retained cards stay in their slots, including keyboard numbering. Reduced-motion settings skip the animation.
+Seats appear around an oval table, with the viewer at the bottom and only face-down cards at other seats. The center shows that all cards are dealt. After an authoritative turn update, face-down cards animate directly clockwise between seats, including the last-to-first pass. Animations do not delay valid selections or claims. The new card highlights briefly and occupies the outgoing card slot; retained cards stay in their slots, including keyboard numbering. Reduced-motion settings skip the animation.
 
-When KIKIK is claimed, each viewer keeps their own four cards in place. The winner is marked at their seat and their winning hand is revealed in a separate panel below the viewer hand. Other hands remain hidden. These are frontend presentation changes using existing private snapshots; no new server data or backend update is required.
+When KIKIK is claimed, each viewer keeps their own four cards in place. The winner is marked at their seat and their winning hand is revealed in a separate panel below the viewer hand. Other hands remain hidden. The all-dealt rules require the updated backend. The lobby disables starting on older APIs until settings.dealRule advertises all_dealt. Deploy the complete updated abcs-game folder and restart Node; no server.js changes are needed.

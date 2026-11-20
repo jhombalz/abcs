@@ -140,42 +140,28 @@ class KikikTable extends StatelessWidget {
                               ),
                             ),
                           ] else ...[
-                            Semantics(
-                              label: 'Buffer deck, four face-down cards',
-                              child: ExcludeSemantics(
-                                child: SizedBox(
-                                  width: 90,
-                                  height: 84,
-                                  child: Stack(
-                                    alignment: Alignment.center,
-                                    children: [
-                                      for (var i = 0; i < 4; i++)
-                                        Transform.translate(
-                                          offset: Offset(
-                                            (i - 1.5) * 5,
-                                            (1.5 - i) * 3,
-                                          ),
-                                          child: Transform.rotate(
-                                            angle: (i - 1.5) * 0.07,
-                                            child: const HiddenCard(
-                                              width: 46,
-                                              height: 64,
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              ),
+                            const Icon(
+                              Icons.sync,
+                              size: 32,
+                              color: Color(0xffbbd8c2),
                             ),
                             const SizedBox(height: 8),
                             const Text(
-                              'BUFFER · 4 CARDS',
+                              'PASS CLOCKWISE',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
                                 letterSpacing: 0.7,
+                                color: Color(0xffbbd8c2),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            const Text(
+                              'All cards dealt',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 12,
                                 color: Color(0xffbbd8c2),
                               ),
                             ),
@@ -210,10 +196,13 @@ class KikikTable extends StatelessWidget {
                       ),
                     ),
                   if (moving && seats.isNotEmpty) ...[
-                    for (var i = 0; i < seats.length - 1; i++)
-                      _travel(seats[i], seats[i + 1], center, t),
-                    _travel(seats.last, center, center, t),
-                    _travel(center, seats.first, center, t),
+                    for (var i = 0; i < seats.length; i++)
+                      _travel(
+                        seats[i],
+                        seats[(i + 1) % seats.length],
+                        center,
+                        t,
+                      ),
                   ],
                 ],
               );
@@ -420,12 +409,8 @@ class _PassTrails extends CustomPainter {
       );
     }
 
-    for (var i = 0; i < seats.length - 1; i++) {
-      draw(seats[i], seats[i + 1]);
-    }
-    if (seats.isNotEmpty) {
-      draw(seats.last, center);
-      draw(center, seats.first);
+    for (var i = 0; i < seats.length; i++) {
+      draw(seats[i], seats[(i + 1) % seats.length]);
     }
   }
 
