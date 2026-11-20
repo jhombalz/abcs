@@ -35,11 +35,19 @@ class GamePicker extends StatelessWidget {
             selected: value == 'kikik',
             onSelected: enabled ? (_) => onChanged('kikik') : null,
           ),
+          ChoiceChip(
+            avatar: const Icon(Icons.visibility_off_outlined, size: 20),
+            label: const Text('Butbutay · 3–6 players'),
+            selected: value == 'butbutay',
+            onSelected: enabled ? (_) => onChanged('butbutay') : null,
+          ),
         ],
       ),
       const SizedBox(height: 10),
       Text(
-        value == 'kikik'
+        value == 'butbutay'
+            ? 'Drop cards face down, declare a rank, and call LIE when you doubt a claim.'
+            : value == 'kikik'
             ? 'Pass cards, collect four matching ranks, then call KIKIK first.'
             : 'Buzz first and answer English or math questions.',
         style: const TextStyle(fontSize: 14, height: 1.5),

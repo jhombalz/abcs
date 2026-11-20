@@ -15,6 +15,66 @@ class LobbySettings extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (room['mode'] == 'butbutay') {
+      final players = room['players'] as List;
+      final supported = room['settings']?['rules'] == 'last_drop_only';
+      final ready =
+          supported &&
+          players.length >= 3 &&
+          players.length <= 6 &&
+          players.every((p) => p['connected'] == true);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'BUTBUTAY',
+            style: TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.bold,
+              color: Color(0xffdaf975),
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Bluff your way to an empty hand. Drop 1–4 cards face down and declare a rank. Others have 7 seconds to call LIE.',
+            style: TextStyle(fontSize: 16, height: 1.5),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            '3–6 players · 52 cards, no jokers · All cards dealt',
+            style: TextStyle(fontSize: 14),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Only the latest drop is picked up after a challenge. Unchallenged drops let the same player continue. Your final drop must survive the challenge window to win.',
+            style: TextStyle(fontSize: 14, height: 1.5),
+          ),
+          const SizedBox(height: 12),
+          if (room['notice'] != null) Text('${room['notice']}'),
+          if (!supported)
+            const Text(
+              'The API needs the Butbutay backend update before starting.',
+            )
+          else if (!ready)
+            Text(
+              players.length < 3
+                  ? 'Invite ${3 - players.length} more player(s) to start.'
+                  : 'Waiting for reserved seats to reconnect.',
+            ),
+          const SizedBox(height: 16),
+          if (isHost)
+            FilledButton.icon(
+              onPressed: !busy && ready
+                  ? () => onAction('start_game', {})
+                  : null,
+              icon: const Icon(Icons.play_arrow),
+              label: const Text('Start Butbutay'),
+            )
+          else
+            const Text('Waiting for the host to start Butbutay.'),
+        ],
+      );
+    }
     if (room['mode'] == 'kikik') {
       final players = room['players'] as List;
       final currentRules = room['settings']?['dealRule'] == 'all_dealt';

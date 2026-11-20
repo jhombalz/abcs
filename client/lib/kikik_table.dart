@@ -11,12 +11,20 @@ class KikikTable extends StatelessWidget {
     required this.animation,
     required this.finished,
     required this.winner,
+    this.centerContent,
+    this.activePlayerId,
+    this.showCardCounts = false,
+    this.showPassing = true,
   });
   final List<Map> players;
   final String? viewerId;
   final Animation<double> animation;
   final bool finished;
   final Map? winner;
+  final Widget? centerContent;
+  final String? activePlayerId;
+  final bool showCardCounts;
+  final bool showPassing;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -38,7 +46,11 @@ class KikikTable extends StatelessWidget {
                 ? 62.0
                 : 80.0
           : 96.0;
-      final seatHeight = compact && crowded ? 72.0 : 80.0;
+      final seatHeight = showCardCounts
+          ? 100.0
+          : compact && crowded
+          ? 72.0
+          : 80.0;
       final center = Offset(width / 2, height / 2);
       final rx = (width - seatWidth) / 2 - 4;
       final ry = (height - seatHeight) / 2 - 4;
@@ -68,7 +80,9 @@ class KikikTable extends StatelessWidget {
             animation: animation,
             builder: (context, _) {
               final moving =
-                  !finished && animation.status == AnimationStatus.forward;
+                  showPassing &&
+                  !finished &&
+                  animation.status == AnimationStatus.forward;
               final t = Curves.easeInOutCubic.transform(animation.value);
               return Stack(
                 clipBehavior: Clip.none,
@@ -107,78 +121,80 @@ class KikikTable extends StatelessWidget {
                     alignment: Alignment.center,
                     child: SizedBox(
                       width: centerWidth,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (finished && winner != null) ...[
-                            const Icon(
-                              Icons.emoji_events_outlined,
-                              color: Color(0xffdaf975),
-                              size: 26,
-                            ),
-                            const SizedBox(height: 4),
-                            Semantics(
-                              liveRegion: true,
-                              child: Text(
-                                '${winner!['name']}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
+                      child:
+                          centerContent ??
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (finished && winner != null) ...[
+                                const Icon(
+                                  Icons.emoji_events_outlined,
                                   color: Color(0xffdaf975),
+                                  size: 26,
                                 ),
-                              ),
-                            ),
-                            const Text(
-                              'KIKIK!',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Color(0xffdaf975),
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ] else ...[
-                            const Icon(
-                              Icons.sync,
-                              size: 32,
-                              color: Color(0xffbbd8c2),
-                            ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'PASS CLOCKWISE',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 0.7,
-                                color: Color(0xffbbd8c2),
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            const Text(
-                              'All cards dealt',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Color(0xffbbd8c2),
-                              ),
-                            ),
-                            if (moving)
-                              const Padding(
-                                padding: EdgeInsets.only(top: 4),
-                                child: Text(
-                                  'Passing…',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Color(0xffdaf975),
+                                const SizedBox(height: 4),
+                                Semantics(
+                                  liveRegion: true,
+                                  child: Text(
+                                    '${winner!['name']}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xffdaf975),
+                                    ),
                                   ),
                                 ),
-                              ),
-                          ],
-                        ],
-                      ),
+                                const Text(
+                                  'KIKIK!',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Color(0xffdaf975),
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ] else ...[
+                                const Icon(
+                                  Icons.sync,
+                                  size: 32,
+                                  color: Color(0xffbbd8c2),
+                                ),
+                                const SizedBox(height: 8),
+                                const Text(
+                                  'PASS CLOCKWISE',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 0.7,
+                                    color: Color(0xffbbd8c2),
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                const Text(
+                                  'All cards dealt',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xffbbd8c2),
+                                  ),
+                                ),
+                                if (moving)
+                                  const Padding(
+                                    padding: EdgeInsets.only(top: 4),
+                                    child: Text(
+                                      'Passing…',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: Color(0xffdaf975),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ],
+                          ),
                     ),
                   ),
                   for (var i = 0; i < players.length; i++)
@@ -193,6 +209,8 @@ class KikikTable extends StatelessWidget {
                         own: players[i]['id'] == viewerId,
                         winner: finished && winner?['id'] == players[i]['id'],
                         compact: compact && crowded,
+                        active: activePlayerId == players[i]['id'],
+                        showCardCount: showCardCounts,
                       ),
                     ),
                   if (moving && seats.isNotEmpty) ...[
@@ -238,16 +256,21 @@ class _TableSeat extends StatelessWidget {
     required this.own,
     required this.winner,
     required this.compact,
+    required this.active,
+    required this.showCardCount,
   });
   final Map player;
   final bool own;
   final bool winner;
   final bool compact;
+  final bool active;
+  final bool showCardCount;
   @override
   Widget build(BuildContext context) {
     final connected = player['connected'] == true;
     final locked = player['locked'] == true;
     final name = '${player['name']}';
+    final count = (player['cardCount'] as num? ?? 4).toInt();
     return Tooltip(
       message:
           '$name${own ? ' (you)' : ''} · ${winner
@@ -265,7 +288,9 @@ class _TableSeat extends StatelessWidget {
                 ? 'reconnecting'
                 : locked
                 ? 'card locked'
-                : 'at the table'}, four cards',
+                : active
+                ? 'playing'
+                : 'at the table'}, $count cards',
         child: ExcludeSemantics(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -282,7 +307,7 @@ class _TableSeat extends StatelessWidget {
                       : const Color(0xff223a32),
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: winner || own
+                    color: winner || own || active
                         ? const Color(0xffdaf975)
                         : const Color(0xff6e8d7e),
                     width: winner ? 3 : 1,
@@ -326,6 +351,15 @@ class _TableSeat extends StatelessWidget {
                     height: 1,
                     color: Color(0xffdaf975),
                     fontWeight: FontWeight.bold,
+                  ),
+                )
+              else if (showCardCount)
+                Text(
+                  '$count cards',
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1,
+                    color: active ? const Color(0xffdaf975) : null,
                   ),
                 )
               else

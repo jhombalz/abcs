@@ -11,6 +11,7 @@ import 'lobby_settings.dart';
 import 'kikik_panel.dart';
 import 'game_picker.dart';
 import 'seat_store.dart';
+import 'butbutay_panel.dart';
 
 void main() => runApp(const BuzzClubApp());
 
@@ -105,10 +106,10 @@ class _LobbyPageState extends State<LobbyPage> {
           connected = false;
           busy = false;
           restoring = false;
-          final cards = room?['mode'] == 'kikik';
+          final cards = ['kikik', 'butbutay'].contains(room?['mode']);
           room = null;
           error = cards
-              ? 'Disconnected. Reconnecting to your reserved KIKIK seat…'
+              ? 'Disconnected. Reconnecting to your reserved seat…'
               : 'Disconnected. Rejoin after reconnecting.';
         });
       }
@@ -190,7 +191,7 @@ class _LobbyPageState extends State<LobbyPage> {
 
   void rememberSeat(Map data) {
     if (data['resume'] is! Map) {
-      if (data['room']?['mode'] != 'kikik') unawaited(seatStore.clear());
+      if (data['room']?['mode'] == 'quiz') unawaited(seatStore.clear());
       return;
     }
     final resume = Map<String, dynamic>.from(data['resume'] as Map);
@@ -220,6 +221,10 @@ class _LobbyPageState extends State<LobbyPage> {
           : status == 'QUESTION_ACTIVE' && feedback == null
           ? 'round'
           : status == 'PASSING'
+          ? 'round'
+          : status == 'CHALLENGE'
+          ? 'buzz'
+          : status == 'DROPPING'
           ? 'round'
           : null;
       if (cue != null) unawaited(sounds.play(cue));
@@ -273,13 +278,14 @@ class _LobbyPageState extends State<LobbyPage> {
         unawaited(seatStore.clear());
       } else {
         if (event == 'create_room' &&
-            selectedMode == 'kikik' &&
-            data['room']?['mode'] != 'kikik') {
+            selectedMode != 'quiz' &&
+            data['room']?['mode'] != selectedMode) {
           ignoredRoomCode = data['room']?['code'] as String?;
           socket.emit('leave_room');
           setState(() {
             room = null;
-            error = 'The API needs the KIKIK backend update before this mode can be played.';
+            error =
+                'The API needs the ${selectedMode == 'butbutay' ? 'Butbutay' : 'KIKIK'} backend update before this mode can be played.';
           });
           return;
         }
@@ -381,7 +387,7 @@ class _LobbyPageState extends State<LobbyPage> {
           ),
         ),
         const SizedBox(height: 40),
-        const Text('Quiz & KIKIK | Play with friends'),
+        const Text('Quiz · KIKIK · Butbutay'),
       ],
     );
     final panel = Container(
@@ -550,7 +556,15 @@ class _LobbyPageState extends State<LobbyPage> {
             if (!playing) const SizedBox(height: 16),
             if (!playing)
               Text(
-                '${activeRoom['mode'] == 'kikik' ? 'KIKIK' : 'Quiz'} room · ${players.length} / ${activeRoom['mode'] == 'kikik' ? 12 : 10}',
+                '${activeRoom['mode'] == 'kikik'
+                    ? 'KIKIK'
+                    : activeRoom['mode'] == 'butbutay'
+                    ? 'Butbutay'
+                    : 'Quiz'} room · ${players.length} / ${activeRoom['mode'] == 'kikik'
+                    ? 12
+                    : activeRoom['mode'] == 'butbutay'
+                    ? 6
+                    : 10}',
               ),
             if (!playing)
               for (final player in players)
@@ -574,6 +588,13 @@ class _LobbyPageState extends State<LobbyPage> {
               LobbySettings(
                 room: activeRoom,
                 isHost: activeRoom['hostId'] == viewerId,
+                busy: busy,
+                onAction: (event, payload) => action(event, payload),
+              )
+            else if (activeRoom['mode'] == 'butbutay')
+              ButbutayPanel(
+                room: activeRoom,
+                playerId: viewerId,
                 busy: busy,
                 onAction: (event, payload) => action(event, payload),
               )
